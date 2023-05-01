@@ -4,9 +4,13 @@ Coalition Fairness analyzes fairness of actions between groups of Autonomous Veh
 
 ## Installation
 
-Use the package manager [pip](https://pip.pypa.io/en/stable/) to install foobar.
 
 ```bash
+
+# Create virtual environment
+conda create -n copo python=3.7
+conda activate copo 
+
 git clone https://github.com/dianaggomez/coalitional_fairness.git
 
 ```
