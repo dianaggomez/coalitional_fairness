@@ -16,7 +16,7 @@ Clone repository
 git clone https://github.com/dianaggomez/coalitional_fairness.git
 
 ```
-Install High Level Controller MA environment for training
+Install the multiagent High Level Controller environment for training
 
 ```bash
 cd coalitional_fairness/mutliagent
