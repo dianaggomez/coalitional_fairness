@@ -5,16 +5,18 @@ Coalition Fairness analyzes fairness of actions between groups of Autonomous Veh
 ## Installation
 
 
-```bash
 
-# Create virtual environment
+Create virtual environment
+```bash
 conda create -n copo python=3.7
 conda activate copo 
-
+```
+Clone repository
+```bash
 git clone https://github.com/dianaggomez/coalitional_fairness.git
 
 ```
-To install multiagent T-intersection environment for training
+Install High Level Controller MA environment for training
 
 ```bash
 cd coalitional_fairness/mutliagent
