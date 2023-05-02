@@ -36,7 +36,7 @@ pip install -e .
 Move the following files
 
 ```bash
-cd..
+cd ..
 move ~/ippo/train_hlc_ippo.py ~/CoPO/copo_code/copo
 move ~/ippo/callbacks.py ~/CoPO/copo_code/copo
 ```
