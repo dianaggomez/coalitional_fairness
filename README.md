@@ -36,10 +36,20 @@ pip install -e .
 Move the following files
 
 ```bash
-cd ..
+cd 
 move ~/ippo/train_hlc_ippo.py ~/CoPO/copo_code/copo
 move ~/ippo/callbacks.py ~/CoPO/copo_code/copo
 ```
+
+## Usage
+
+To train the High Level Controller environment using CoPo ippo algorithm
+```bash
+cd CoPO/copo_code/copo/
+python train_hlc_ippo.py --exp-name hlc_ippo
+```
+
+
 
 
 ## Contributing
