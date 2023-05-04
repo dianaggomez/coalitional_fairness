@@ -5,12 +5,17 @@ Coalition Fairness analyzes fairness of actions between groups of Autonomous Veh
 ## Installation
 
 
-
 Create virtual environment
 ```bash
 conda create -n coalitional_fairness python=3.7
 conda activate coalitional_fairness 
 ```
+Create directory
+```bash
+mkdir coalitional_fairness
+cd coalitional_fairness
+```
+
 Clone repository
 ```bash
 git clone https://github.com/dianaggomez/coalitional_fairness.git
@@ -22,6 +27,8 @@ Install the multiagent High Level Controller environment for training
 cd coalitional_fairness/mutliagent
 pip install -e .
 
+cd ..
+cd ..
 ```
 
 Download Copo to use ippo algorithm
@@ -37,8 +44,9 @@ Move the following files
 
 ```bash
 cd 
-move ~/ippo/train_hlc_ippo.py ~/CoPO/copo_code/copo
-move ~/ippo/callbacks.py ~/CoPO/copo_code/copo
+cd coalitional_fairness
+move ~/coalitional_fairness/ippo/train_hlc_ippo.py ~/CoPO/copo_code/copo
+move ~/coalitional_fairness/ippo/callbacks.py ~/CoPO/copo_code/copo
 ```
 
 ## Usage
