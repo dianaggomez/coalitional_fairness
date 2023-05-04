@@ -1,8 +1,11 @@
 from os import environ
 import gym
 from gym import spaces
+import random, os
 import numpy as np
+import tensorflow as tf
 import os
+import ray
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
@@ -18,10 +21,13 @@ class MARLHighLevelControllerEnv(gym.Env):
         self.config = config
         self.num_agents = 2
         self._agent_ids = set(["agent_{}".format(num) for num in range(1, self.num_agents+1)])
+        print("Agent IDs: ", self._agent_ids)
         
         self.action_space = {agent_id: spaces.Discrete(3) for agent_id in self._agent_ids}
+        print("action space: ", self.action_space)
         self.observation_space = {agent_id: spaces.Box(low = 0, high = 10, shape= (14,), dtype = np.float64) for agent_id in self._agent_ids}
-        
+
+        self.active_keys = list(self._agent_ids)
         self.all_queues = self.get_all_queues()
         self.queue_config = 0
         self.left_queue, self.right_queue = self.generate_queue()
@@ -34,7 +40,8 @@ class MARLHighLevelControllerEnv(gym.Env):
         self.time = 0
         self.time_remaining = 10 #each turn a set with two rounds
         
-        self.info = {"AVs_cleared_queue": None, "AVs_time": None, "Humans_cleared": None, "humans_time": None}
+        # self.info = {"AVs_cleared_queue": None, "AVs_time": None, "Humans_cleared": None, "humans_time": None}
+        self.info = {"cleared_queue": None, "time" : None}
         self.infos = {agent_id: self.info for agent_id in self._agent_ids}
         self.dones = {agent_id: False for agent_id in self._agent_ids}
         self.dones["__all__"] = False
@@ -58,7 +65,7 @@ class MARLHighLevelControllerEnv(gym.Env):
         
         
     def get_all_queues(self): 
-        path ='/home/diana/journal/queues_3to10.npy'
+        path ='/home/diana/coalitional_fairness/coalitional_fairness/queues_3to10.npy'
         # path = "/home/diana/metadrive/new_test_batch_52.npy"
         all_queues = np.load(path, allow_pickle=True)
 
@@ -141,14 +148,22 @@ class MARLHighLevelControllerEnv(gym.Env):
         high-level actions:  0 -> (1,0), 1 -> (0,1), 2 -> (1,1)
         human :1, coalition: 2, empty:0 
         '''
+        print("Left queue len : ",len(self.left_queue))
+        print("Right queue len: ", len(self.right_queue))
         
-        if not (len(self.left_queue) > 0):
+        if len(self.left_queue) == 0:
+            print("left empty")
+            self.visualize_queue()
             left = 0
             right = self.right_queue[0]
-        elif not (len(self.right_queue) > 0):
+        elif len(self.right_queue) == 0:
+            print("right empty")
+            self.visualize_queue()
             right = 0
             left = self.left_queue[-1]
         else:
+            print("none empty")
+            self.visualize_queue()
             left = self.left_queue[-1]
             right = self.right_queue[0]
 
@@ -264,11 +279,19 @@ class MARLHighLevelControllerEnv(gym.Env):
         return w_s1, w_s2 
         
     def take_step(self, high_level_action):
-        HLA = []
-        #TODO: Check action, you may have to unpack it once more.
-        for agent, action in high_level_action:
-            HLA.append(action)
-            
+        print ("This is the action: ",  high_level_action)
+        HLA = [2,2] # initialize with the SR
+        print(high_level_action)
+        # breakpoint()
+        # ray.util.pdb.set_trace()
+        for agent_id, action in high_level_action.items():
+            print("agent_id", )
+            HLA[int(agent_id[-1])-1] = action
+        
+        print("===============================")
+        print("HLA unpacked into a list: ", HLA)
+        print("===============================") 
+        
         hla, num_of_vehicles = self.process_high_level_action(HLA)
         
         if hla == (0,1):
@@ -338,12 +361,14 @@ class MARLHighLevelControllerEnv(gym.Env):
     
     def get_reward(self, w_s1, w_s2, coalition):
         current_vehices = list(self.left_queue).count(coalition) + list(self.right_queue).count(coalition)
-        r = (1 - (current_vehices/list(self.original_queue.count(coalition)))**0.5) - 0.1
+        # breakpoint()
+        r = (1 - (current_vehices/list(self.original_queue).count(coalition))**0.5) - 0.1
         # ======== Theil Index Reward Function ========
         if self.fairness:
             self.update_wealth(w_s1, w_s2)
             self.update_fair_wealth()
             r_f = self.calculate_rf()
+            self.infos['agent_{}'.format(coalition)]['fair_reward'] = r_f
         else:
             r_f = 0   
         self.fair_reward += r_f
@@ -355,63 +380,93 @@ class MARLHighLevelControllerEnv(gym.Env):
         AV_done = list(self.left_queue).count(1) + list(self.right_queue).count(1) == 0 # AV_1
         human_done = list(self.left_queue).count(2) + list(self.right_queue).count(2) == 0 # AV_2
         
-        if not self.training:
-            # DONE FUNCTION FOR TIME DATA 
-            # TODO: Only record time for successes (i.e. AVs exit first)
-            if AV_done and not self.AVs_done:
-                # print("AVs are out!")
-                self.AVs_done = True
-                self.info["AVs_time"] = self.time * 0.2
-                self.info["fair_reward"] = self.fair_reward
-            if human_done and not self.Humans_done:
-                self.Humans_done = True
-                self.info["humans_time"] = self.time * 0.2
-            if AV_done and human_done:
-                self.info["cleared_queue"] = True
-                return True
-            return False
-        else:
-            # DONE FUNCTION FOR TRAINING
-            if human_done: # Terminate: if humans clear the queue
-                self.Humans_time = self.time
-                self.Humans_done = True
-                self.info["humans_time"] = self.Humans_time*0.2
-                self.info["AVs_cleared_queue"] = False
-                self.info["Humans_cleared"] = True
-                self.dones['agent_1'] = True
-                return True
-            if AV_done: # Terminate: if AVs clear the queue
-                self.AVs_time = self.time
-                self.info["AVs_time"] = self.AVs_time*0.2
-                self.info["AVs_cleared_queue"] = True
-                self.info["fair_reward"] = self.fair_reward
-                self.info["Humans_cleared"] = False
-                self.dones['agent_2'] = True
-                return True
-            if self.time_remaining == 0:  # Terminate: if time elapsed
-                self.info["AVs_cleared_queue"] = False
-                self.dones["__all__"] = True # the env terminated
-                return True
-            return False
+        # DONE FUNCTION FOR MA RLlib TRAINING
+        if human_done and not self.Humans_done: # Terminate: if humans clear the queue
+            self.Humans_time = self.time
+            self.Humans_done = True
+            self.infos['agent_2']["time"] = self.Humans_time*0.2
+            self.infos['agent_2']["cleared_queue"] = True
+            self.dones['agent_2'] = True
+            self.active_keys.remove('agent_2')
+        if AV_done and not self.infos['agent_2']['cleared_queue']: # Terminate: if AVs clear the queue
+            self.AVs_time = self.time
+            self.infos['agent_1']["time"] = self.AVs_time*0.2
+            self.infos['agent_1']["cleared_queue"] = True
+            self.dones['agent_1'] = True
+            self.active_keys.remove('agent_1')
+        if self.time_remaining == 0 or (self.dones['agent_2'] and self.dones['agent_1']):  # Terminate: if time elapsed
+            self.dones["__all__"] = True # the env terminated
+        return self.dones
+        
+        # if not self.training:
+        #     # DONE FUNCTION FOR TIME DATA 
+        #     # TODO: Only record time for successes (i.e. AVs exit first)
+        #     if AV_done and not self.AVs_done:
+        #         # print("AVs are out!")
+        #         self.AVs_done = True
+        #         self.info["AVs_time"] = self.time * 0.2
+        #         self.info["fair_reward"] = self.fair_reward
+        #     if human_done and not self.Humans_done:
+        #         self.Humans_done = True
+        #         self.info["humans_time"] = self.time * 0.2
+        #     if AV_done and human_done:
+        #         self.info["cleared_queue"] = True
+        #         return True
+        #     return False
+        # else:
+        #     # DONE FUNCTION FOR TRAINING
+        #     if human_done: # Terminate: if humans clear the queue
+        #         self.Humans_time = self.time
+        #         self.Humans_done = True
+        #         self.info["humans_time"] = self.Humans_time*0.2
+        #         self.info["AVs_cleared_queue"] = False
+        #         self.info["Humans_cleared"] = True
+        #         self.dones['agent_1'] = True
+        #         return True
+        #     if AV_done: # Terminate: if AVs clear the queue
+        #         self.AVs_time = self.time
+        #         self.info["AVs_time"] = self.AVs_time*0.2
+        #         self.info["AVs_cleared_queue"] = True
+        #         self.info["fair_reward"] = self.fair_reward
+        #         self.info["Humans_cleared"] = False
+        #         self.dones['agent_2'] = True
+        #         return True
+        #     if self.time_remaining == 0:  # Terminate: if time elapsed
+        #         self.info["AVs_cleared_queue"] = False
+        #         self.dones["__all__"] = True # the env terminated
+        #         return True
+        #     return False
 
     def step(self, action):
         # av_2 = self.get_company_action()[0]
         # w_s1, w_s2 = self.take_step([action, av_2])
+        print("+++++++++++++++++++++++++++++++++++++++")
+        print("HLA",  action)
+        print("+++++++++++++++++++++++++++++++++++++++")
         w_s1, w_s2 = self.take_step(action)
+        self.visualize_queue()
         self.time_remaining -= 1
         self.time += 1
         
-        # d = self.done()
-        self.done()
-        # i = self.info
-        i = self.infos
-        r =  {"agent_{}".format(num): self.get_reward(w_s1, w_s2, num) for num in range(1, self.num_agents+1)}
         o = self.get_observation()
-        
+        # TODO: get the reward for the active agents, complete before done in case and agent clears the queue
+        r =  {"agent_{}".format(int(agent_id[-1])): self.get_reward(w_s1, w_s2, int(agent_id[-1])) for agent_id in self.active_keys}
+        # d = self.done()
+        # i = self.infos
+        # only need the info for the active agents
+        i = {"agent_{}".format(int(agent_id[-1])): self.infos[agent_id] for agent_id in self.active_keys}
+        # done needs to be completed last because it updates the number of active agents
+        d = self.done()
+        print("Dones: ", d)
+        # i = self.info
+        # i = self.infos
+        # breakpoint()
         return o, r, d, i
 
     def reset(self):
+        print("Environement reset!")
         self.left_queue, self.right_queue = self.generate_queue()
+        print("Queue: ", self.left_queue, self.right_queue )
         self.orig_left_queue, self.orig_right_queue = self.left_queue.copy(), self.right_queue.copy()
         self.left_vehicle_queue = deque([])
         self.right_vehicle_queue = deque([])
@@ -420,7 +475,8 @@ class MARLHighLevelControllerEnv(gym.Env):
         self.AVs_time, self.Humans_time = 0, 0
         self.time = 0
         self.time_remaining = 10 #each turn a set with two rounds
-        self.info = {"AVs_cleared_queue": None, "AVs_time": None, "Humans_cleared": None, "humans_time": None}
+        # self.info = {"AVs_cleared_queue": None, "AVs_time": None, "Humans_cleared": None, "humans_time": None}
+        self.info = {"cleared_queue": None, "time" : None}
         self.infos = {agent_id: self.info for agent_id in self._agent_ids}
         self.dones = {agent_id: False for agent_id in self._agent_ids}
         self.dones["__all__"] = False
@@ -456,7 +512,15 @@ class MARLHighLevelControllerEnv(gym.Env):
         num_of_vehicles_remaining_2 = left_queue_copy.count(2) + right_queue_copy.count(2)
         self.current_obs = np.array(queue + [num_of_vehicles_remaining_2] + [12-self.queue_config])
         
-        observations = {'agent_1': obs, 'agent_2': self.current_obs}
+        observations = {}
+        for agent_id in self.active_keys:
+            coalition = int(agent_id[-1])
+            num_of_vehicles_remaining = left_queue_copy.count(coalition) + right_queue_copy.count(coalition)
+            observations[agent_id] = queue + [num_of_vehicles_remaining] + [self.original_queue.count(coalition)]
+        
+        print("Observations: ", observations)
+        # # TODO: Once the agent has exited an observation is no longer needed
+        # observations = {'agent_1': obs, 'agent_2': self.current_obs}
         return observations
     
     def get_av_baseline_dict(self):
@@ -486,14 +550,24 @@ class MARLHighLevelControllerEnv(gym.Env):
     def close(self):
         pass
 
-    def seed(self):
+    def seed(self, seed):
+        random.seed(seed)
+        os.environ['PYTHONHASHSEED'] = str(seed)
+        np.random.seed(seed)
+        tf.random.set_seed(seed)
+        os.environ['TF_DETERMINISTIC_OPS'] = '1'
+        os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
+        
+        tf.config.threading.set_inter_op_parallelism_threads(1)
+        tf.config.threading.set_intra_op_parallelism_threads(1)
         pass
 
 if __name__ == "__main__":
     # Following SR policy
     env = MARLHighLevelControllerEnv()
     env.reset()
-    actions = env.action_space.sample()
+    # actions = env.action_space.sample()
+    actions = {'agent_1': 1, 'agent_2':2}
     print(actions)
     o, r, done, info = env.step(actions) 
     print("Observations: ", o)
