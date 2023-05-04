@@ -56,7 +56,7 @@ Folder structure:
     │   ├── multiagent         
     │   ├── ippo         
     │   └── ...               
-    └── Copo
+    └── CoPO
     
 ## Usage
 
