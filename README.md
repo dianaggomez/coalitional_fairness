@@ -49,6 +49,15 @@ move ~/coalitional_fairness/ippo/train_hlc_ippo.py ~/CoPO/copo_code/copo
 move ~/coalitional_fairness/ippo/callbacks.py ~/CoPO/copo_code/copo
 ```
 
+Folder structure:
+
+    coalitional_fairness
+    ├── coalitional_fairness                   
+    │   ├── multiagent         
+    │   ├── ippo         
+    │   └── ...               
+    └── Copo
+    
 ## Usage
 
 To train the High Level Controller environment using CoPo ippo algorithm
