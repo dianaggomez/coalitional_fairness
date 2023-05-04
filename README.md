@@ -46,10 +46,8 @@ move ~/ippo/callbacks.py ~/CoPO/copo_code/copo
 To train the High Level Controller environment using CoPo ippo algorithm
 ```bash
 cd CoPO/copo_code/copo/
-python train_hlc_ippo.py --exp-name hlc_ippo
+python train_hlc_ippo.py --exp-name hlc_ippo --num-gpus=NUM_GPUS
 ```
-
-
 
 
 ## Contributing
