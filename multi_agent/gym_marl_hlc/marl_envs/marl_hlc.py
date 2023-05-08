@@ -41,7 +41,7 @@ class MARLHighLevelControllerEnv(gym.Env):
         self.time_remaining = 10 #each turn a set with two rounds
         
         # self.info = {"AVs_cleared_queue": None, "AVs_time": None, "Humans_cleared": None, "humans_time": None}
-        self.info = {"cleared_queue": None, "time" : None}
+        self.info = {"cleared_queue": False, "time" : None}
         self.infos = {agent_id: self.info for agent_id in self._agent_ids}
         self.dones = {agent_id: False for agent_id in self._agent_ids}
         self.dones["__all__"] = False
@@ -151,6 +151,8 @@ class MARLHighLevelControllerEnv(gym.Env):
         print("Left queue len : ",len(self.left_queue))
         print("Right queue len: ", len(self.right_queue))
         
+        if len(self.left_queue) == 0 and len(self.right_queue) == 0:
+            self.reset()
         if len(self.left_queue) == 0:
             print("left empty")
             self.visualize_queue()
@@ -476,10 +478,12 @@ class MARLHighLevelControllerEnv(gym.Env):
         self.time = 0
         self.time_remaining = 10 #each turn a set with two rounds
         # self.info = {"AVs_cleared_queue": None, "AVs_time": None, "Humans_cleared": None, "humans_time": None}
-        self.info = {"cleared_queue": None, "time" : None}
+        self.info = {"cleared_queue": False, "time" : None}
         self.infos = {agent_id: self.info for agent_id in self._agent_ids}
         self.dones = {agent_id: False for agent_id in self._agent_ids}
         self.dones["__all__"] = False
+        
+        self.active_keys = list(self._agent_ids)
         
         self.num_s1 = self.queue_config #human drivers
         self.num_s2 = 12 - self.queue_config # AVs
